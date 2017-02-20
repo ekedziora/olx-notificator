@@ -4,12 +4,14 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+import com.typesafe.scalalogging.LazyLogging
+
 import scala.concurrent.ExecutionException
 
-object Main {
+object Main extends LazyLogging {
   def main(args: Array[String]): Unit = {
     val executor = new ScheduledThreadPoolExecutor(1)
-    val executor2 = new ScheduledThreadPoolExecutor(1)
+    val errorHandler = new ScheduledThreadPoolExecutor(1)
 
     val runnable: Runnable = new Runnable {
       val exceptionsMap = new ConcurrentHashMap[Class[_ <: Throwable], Int]()
@@ -24,7 +26,7 @@ object Main {
         }
       } catch {
         case t: Throwable =>
-          t.printStackTrace()
+          logger.error("Exception in task", t)
           exceptionsMap.put(t.getClass, exceptionsMap.getOrDefault(t.getClass, 1) + 1)
           if (exceptionsMap.get(t.getClass) > 5) {
             throw new IllegalStateException(s"Exception of type ${t.getClass} was thrown more then 5 times. Ending!")
@@ -33,14 +35,14 @@ object Main {
     }
 
     val future = executor.scheduleAtFixedRate(runnable, 0, 1, TimeUnit.SECONDS)
-    executor2.execute(() =>
+    errorHandler.execute(() =>
       try {
         future.get()
       } catch {
-        case e: InterruptedException => println("Scheduled execution was interrupted")
-        case e: CancellationException => println("Watcher thread has been cancelled")
+        case e: InterruptedException => logger.error("Scheduled execution was interrupted", e)
+        case e: CancellationException => logger.error("Watcher thread has been cancelled", e)
         case e: ExecutionException =>
-          println(s"Uncaught exception in scheduled execution ${e.getCause}")
+          logger.error(s"Uncaught exception in scheduled execution", e.getCause)
           future.cancel(true)
       })
   }
