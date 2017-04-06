@@ -1,3 +1,4 @@
+import java.io.PrintWriter
 import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -58,7 +59,10 @@ class Job extends Runnable with LazyLogging {
       link <- doc extract element("#offers_table tbody") extract elementList(".offer") map (_ extract element("a")) map(_ attr "href")
       offerHtml <- browser.get(link)
     } yield OfferExtractorFactory.getOfferExtractor(link).extractOffer(offerHtml, link)
-    logger.debug(template.html.mailTemplate(offersList).toString())
+    new PrintWriter("result.html") {
+      write(template.html.mailTemplate(offersList).toString())
+      close()
+    }
   } catch {
     case t: Throwable =>
       logger.error("Exception in task", t)

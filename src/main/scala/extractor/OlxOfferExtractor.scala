@@ -19,10 +19,10 @@ class OlxOfferExtractor extends OfferExtractor {
     val title = titleBox flatMap(_ tryExtract text("h1"))
     val subtitle = titleBox flatMap (_ tryExtract element(".offer-titlebox__details"))
     val offerIdString = subtitle flatMap (_ tryExtract text("small"))
-    val offerId = idPattern.findFirstIn(offerIdString.getOrElse("")).flatMap(stringToInt).getOrElse(0)
+    val offerId = idPattern.findFirstIn(orEmptyString(offerIdString))
     val subtitleHtml = subtitle.map(_.innerHtml)
-    val descriptionHtml = (offerElement tryExtract element(".clr .descriptioncontent .marginbott20")).map(_.innerHtml)
-    Offer(link, Html(offerElement.innerHtml), orEmptyString(title), Html(orEmptyString(subtitleHtml)), orEmptyString(price),
-      orEmptyString(imgUrl), offerId, Html(orEmptyString(descriptionHtml)))
+    val descriptionHtml = (offerElement tryExtract element("div .clr .descriptioncontent")).map(_.outerHtml)
+    Offer.createOlxOffer(link, Html(offerElement.innerHtml), orEmptyString(title), Html(orEmptyString(subtitleHtml)), orEmptyString(price),
+      orEmptyString(imgUrl), orEmptyString(offerId), Html(orEmptyString(descriptionHtml)))
   }
 }
