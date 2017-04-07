@@ -30,29 +30,23 @@ import scala.util.Success
 
 object Main extends LazyLogging {
 
-  val mailer: Mailer = Mailer("smtp.gmail.com", 587).auth(true)
-    .as("ekedziora13@gmail.com", "dcejjhnszrvtpilw")
-    .startTtls(true)()
-
   def main(args: Array[String]): Unit = {
+    if (args.length < 4) {
+      println("Too few arguments. 1-sender email, 2-password, 3-mails receivers separated by comma, 4-offers url")
+    }
+
     val executor = new ScheduledThreadPoolExecutor(1)
     val errorHandler = new ScheduledThreadPoolExecutor(1)
 
-    val runnable: Runnable = new Runnable {
-      val exceptionsMap = new ConcurrentHashMap[Class[_ <: Throwable], Int]()
-      override def run(): Unit = try {
+    val senderAddress = args(0)
+    val receivers = args(2).split(',').map(_.trim).filter(_.nonEmpty)
+    val mailer: Mailer = Mailer("smtp.gmail.com", 587)
+      .auth(true)
+      .as(senderAddress, args(1))
+      .startTtls(true)()
+    val job = new Job(mailer, args(3), senderAddress, List(receivers: _*))
 
-      } catch {
-        case t: Throwable =>
-          logger.error("Exception in task", t)
-          exceptionsMap.put(t.getClass, exceptionsMap.getOrDefault(t.getClass, 1) + 1)
-          if (exceptionsMap.get(t.getClass) > 5) {
-            throw new IllegalStateException(s"Exception of type ${t.getClass} was thrown more then 5 times. Ending!")
-          }
-      }
-    }
-
-    val future = executor.scheduleAtFixedRate(new Job(mailer), 0, 20, TimeUnit.SECONDS)
+    val future = executor.scheduleAtFixedRate(job, 0, 60, TimeUnit.SECONDS)
     errorHandler.execute(() =>
       try {
         future.get()
@@ -66,7 +60,7 @@ object Main extends LazyLogging {
   }
 }
 
-class Job(mailer: Mailer) extends Runnable with LazyLogging {
+class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[String]) extends Runnable with LazyLogging {
 
   var lastServedOfferId: Option[OfferId] = None
 
@@ -74,31 +68,27 @@ class Job(mailer: Mailer) extends Runnable with LazyLogging {
 
   override def run(): Unit = try {
     val browser = JsoupBrowser()
-    val doc = browser.get("https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/warszawa/?search%5Bfilter_enum_market%5D%5B0%5D=primary")
+    val doc = browser.get(url)
     val allOffersList = for {
       link <- doc extract element("#offers_table tbody") extract elementList(".offer") map (_ extract element("a")) map(_ attr "href")
       offerHtml <- browser.get(link)
     } yield OfferExtractorFactory.getOfferExtractor(link).extractOffer(offerHtml, link)
 
-    val offersList = lastServedOfferId.map(id => allOffersList.takeWhile(offer => offer.id != id)).getOrElse(allOffersList)
-    offersList.headOption.foreach(head => lastServedOfferId = Some(head.id))
-
-    new PrintWriter("result.html") {
-      write(template.html.mailTemplate(offersList).toString())
-      close()
-    }
-    println("SAVED")
+    val offersList = lastServedOfferId.map(id => allOffersList.takeWhile(offer => offer.id != id))
+      .getOrElse(allOffersList)
+    offersList.headOption
+      .foreach(head => lastServedOfferId = Some(head.id))
 
     if (offersList.nonEmpty) {
       val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
       val part = new MimeBodyPart
       part.setText(template.html.mailTemplate(offersList).toString(), StandardCharsets.UTF_8.name(), "html")
-      mailer(Envelope.from("ekedziora13@gmail.com".addr)
-        .to("ekedziora@hotmail.com".addr)
+      mailer(Envelope.from(senderAddress.addr)
+        .to(receivers.map(_.addr) : _*)
         .subject("Aktualizacja ogłoszeń: " + time)
         .content(Multipart().add(part)))
         .onComplete {
-          case Success(v) => println("delivered report")
+          case Success(v) => logger.info("Report sended on " + time)
           case Failure(ex) => throw ex
         }
     }
@@ -110,6 +100,4 @@ class Job(mailer: Mailer) extends Runnable with LazyLogging {
         throw new IllegalStateException(s"Exception of type ${t.getClass} was thrown more then 5 times. Ending!")
       }
   }
-
-  private def stringToInt(string: String): Option[Int] = Try(Integer.parseInt(string)) map(Option(_)) getOrElse None
 }
