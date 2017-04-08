@@ -64,13 +64,10 @@ class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[St
 
   var lastServedOfferId: Option[OfferId] = None
 
-  val exceptionsMap = new ConcurrentHashMap[Class[_ <: Throwable], Int]()
-
   override def run(): Unit = try {
     val browser = JsoupBrowser()
-    val doc = browser.get(url)
     val allOffersList = for {
-      link <- doc extract element("#offers_table tbody") extract elementList(".offer") map (_ extract element("a")) map(_ attr "href")
+      link <- browser.get(url) extract element("#offers_table tbody") extract elementList(".offer") map (_ extract element("a")) map(_ attr "href")
       offerHtml <- browser.get(link)
     } yield OfferExtractorFactory.getOfferExtractor(link).extractOffer(offerHtml, link)
 
@@ -95,9 +92,5 @@ class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[St
   } catch {
     case t: Throwable =>
       logger.error("Exception in task", t)
-      exceptionsMap.put(t.getClass, exceptionsMap.getOrDefault(t.getClass, 1) + 1)
-      if (exceptionsMap.get(t.getClass) > 5) {
-        throw new IllegalStateException(s"Exception of type ${t.getClass} was thrown more then 5 times. Ending!")
-      }
   }
 }
