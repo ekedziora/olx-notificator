@@ -1,6 +1,8 @@
 import java.io.PrintWriter
 import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
@@ -24,15 +26,19 @@ import scala.concurrent.ExecutionException
 import scala.util.Try
 import courier._
 import Defaults._
+import _root_.extractor.OfferExtractor
+import _root_.extractor.OfferExtractor.stringToInt
 
 import scala.util.Failure
 import scala.util.Success
 
 object Main extends LazyLogging {
 
+  private val DEFAULT_INTERVAL = 60
+
   def main(args: Array[String]): Unit = {
     if (args.length < 4) {
-      println("Too few arguments. 1-sender email, 2-password, 3-mails receivers separated by comma, 4-offers url")
+      println("Too few arguments. 1-sender email, 2-password, 3-mails receivers separated by comma, 4-offers url, 5-check interval in second(optional)")
     }
 
     val executor = new ScheduledThreadPoolExecutor(1)
@@ -44,19 +50,25 @@ object Main extends LazyLogging {
       .auth(true)
       .as(senderAddress, args(1))
       .startTtls(true)()
-    val job = new Job(mailer, args(3), senderAddress, List(receivers: _*))
 
-    val future = executor.scheduleAtFixedRate(job, 0, 60, TimeUnit.SECONDS)
-    errorHandler.execute(() =>
-      try {
-        future.get()
-      } catch {
-        case e: InterruptedException => logger.error("Scheduled execution was interrupted", e)
-        case e: CancellationException => logger.error("Watcher thread has been cancelled", e)
-        case e: ExecutionException =>
-          logger.error(s"Uncaught exception in scheduled execution", e.getCause)
-          future.cancel(true)
-      })
+    val offersPages = args(3).split(',').map(_.trim).filter(_.nonEmpty)
+    val interval = args.lift(4).flatMap(stringToInt).getOrElse(DEFAULT_INTERVAL)
+    offersPages
+      .map(url => new Job(mailer, url, senderAddress, List(receivers: _*)))
+      .zipWithIndex
+      .map { case (job, idx) => executor.scheduleAtFixedRate(job, idx * (interval/2), interval, TimeUnit.SECONDS) }
+      .foreach { future =>
+        errorHandler.execute(() =>
+          try {
+            future.get()
+          } catch {
+            case e: InterruptedException => logger.error("Scheduled execution was interrupted", e)
+            case e: CancellationException => logger.error("Watcher thread has been cancelled", e)
+            case e: ExecutionException =>
+              logger.error(s"Uncaught exception in scheduled execution", e.getCause)
+              future.cancel(true)
+          })
+      }
   }
 }
 
@@ -67,7 +79,7 @@ class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[St
   override def run(): Unit = try {
     val browser = JsoupBrowser()
     val allOffersList = for {
-      link <- browser.get(url) extract element("#offers_table tbody") extract elementList(".offer") map (_ extract element("a")) map(_ attr "href")
+      link <- OfferExtractorFactory.getOfferLinkExtractor(url).extractOfferLinks(browser.get(url))
       offerHtml <- browser.get(link)
     } yield OfferExtractorFactory.getOfferExtractor(link).extractOffer(offerHtml, link)
 
@@ -77,7 +89,7 @@ class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[St
       .foreach(head => lastServedOfferId = Some(head.id))
 
     if (offersList.nonEmpty) {
-      val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+      val time = ZonedDateTime.now(ZoneId.of("Europe/Warsaw")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
       val part = new MimeBodyPart
       part.setText(template.html.mailTemplate(offersList).toString(), StandardCharsets.UTF_8.name(), "html")
       mailer(Envelope.from(senderAddress.addr)

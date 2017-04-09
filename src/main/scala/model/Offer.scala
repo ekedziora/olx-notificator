@@ -15,4 +15,7 @@ object Offer {
 
   def createOtoDomOffer(url: String, pureHtml: Html, title: String, subtitleHtml: Html, price: String, imgUrl: String, id: String, descriptionHtml: Html) =
     new Offer(OfferId(id, ProviderType.OtoDom), url, pureHtml, title, subtitleHtml, price, imgUrl, descriptionHtml)
+
+  def createGumtreeOffer(url: String, pureHtml: Html, title: String, subtitleHtml: Html, price: String, imgUrl: String, id: String, descriptionHtml: Html) =
+    new Offer(OfferId(id, ProviderType.Gumtree), url, pureHtml, title, subtitleHtml, price, imgUrl, descriptionHtml)
 }
