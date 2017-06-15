@@ -57,7 +57,7 @@ object Main extends LazyLogging {
     offersPages
       .map(url => new Job(mailer, url, sender, List(receivers: _*)))
       .zipWithIndex
-      .map { case (job, idx) => executor.scheduleAtFixedRate(job, idx * (interval/2), interval, TimeUnit.SECONDS) }
+      .map { case (job, idx) => executor.scheduleAtFixedRate(job, idx * (interval/offersPages.length), interval, TimeUnit.SECONDS) }
       .foreach { future =>
         errorHandler.execute(() =>
           try {
