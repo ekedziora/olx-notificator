@@ -37,24 +37,25 @@ object Main extends LazyLogging {
   private val DEFAULT_INTERVAL = 60
 
   def main(args: Array[String]): Unit = {
-    if (args.length < 4) {
-      println("Too few arguments. 1-sender email, 2-password, 3-mails receivers separated by comma, 4-offers url, 5-check interval in second(optional)")
+    if (args.length < 2) {
+      println("Too few arguments. 1-mails receivers separated by comma, 2-offers url separated by comma, 3-check interval in seconds (optional)")
     }
 
     val executor = new ScheduledThreadPoolExecutor(1)
     val errorHandler = new ScheduledThreadPoolExecutor(1)
 
-    val senderAddress = args(0)
-    val receivers = args(2).split(',').map(_.trim).filter(_.nonEmpty)
+    val sender = sys.env.getOrElse("sender", throw new IllegalStateException("Please set sender environment variable"))
+    val senderPassword = sys.env.getOrElse("senderPassword", throw new IllegalStateException("Please set sender password environment variable"))
     val mailer: Mailer = Mailer("smtp.gmail.com", 587)
       .auth(true)
-      .as(senderAddress, args(1))
+      .as(sender, senderPassword)
       .startTtls(true)()
 
-    val offersPages = args(3).split(',').map(_.trim).filter(_.nonEmpty)
-    val interval = args.lift(4).flatMap(stringToInt).getOrElse(DEFAULT_INTERVAL)
+    val receivers = args(0).split(',').map(_.trim).filter(_.nonEmpty)
+    val offersPages = args(1).split(',').map(_.trim).filter(_.nonEmpty)
+    val interval = args.lift(2).flatMap(stringToInt).getOrElse(DEFAULT_INTERVAL)
     offersPages
-      .map(url => new Job(mailer, url, senderAddress, List(receivers: _*)))
+      .map(url => new Job(mailer, url, sender, List(receivers: _*)))
       .zipWithIndex
       .map { case (job, idx) => executor.scheduleAtFixedRate(job, idx * (interval/2), interval, TimeUnit.SECONDS) }
       .foreach { future =>
@@ -72,7 +73,7 @@ object Main extends LazyLogging {
   }
 }
 
-class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[String]) extends Runnable with LazyLogging {
+class Job(mailer: Mailer, url: String, sender: String, receivers: List[String]) extends Runnable with LazyLogging {
 
   var lastServedOfferId: Option[OfferId] = None
 
@@ -92,7 +93,7 @@ class Job(mailer: Mailer, url: String, senderAddress: String, receivers: List[St
       val time = ZonedDateTime.now(ZoneId.of("Europe/Warsaw")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
       val part = new MimeBodyPart
       part.setText(template.html.mailTemplate(offersList).toString(), StandardCharsets.UTF_8.name(), "html")
-      mailer(Envelope.from(senderAddress.addr)
+      mailer(Envelope.from(sender.addr)
         .to(receivers.map(_.addr) : _*)
         .subject("Aktualizacja ogłoszeń: " + time)
         .content(Multipart().add(part)))
