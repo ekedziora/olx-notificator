@@ -38,7 +38,7 @@ object Main extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
     if (args.length < 2) {
-      println("Too few arguments. 1-mails receivers separated by comma, 2-offers url separated by comma, 3-check interval in seconds (optional)")
+      println("Too few arguments. 1-mails receivers separated by comma, 2-offers url separated by '|', 3-check interval in seconds (optional)")
     }
 
     val executor = new ScheduledThreadPoolExecutor(1)
@@ -52,7 +52,7 @@ object Main extends LazyLogging {
       .startTtls(true)()
 
     val receivers = args(0).split(',').map(_.trim).filter(_.nonEmpty)
-    val offersPages = args(1).split(',').map(_.trim).filter(_.nonEmpty)
+    val offersPages = args(1).split('|').map(_.trim).filter(_.nonEmpty)
     val interval = args.lift(2).flatMap(stringToInt).getOrElse(DEFAULT_INTERVAL)
     offersPages
       .map(url => new Job(mailer, url, sender, List(receivers: _*)))
