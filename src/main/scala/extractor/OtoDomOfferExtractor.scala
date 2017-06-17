@@ -22,7 +22,7 @@ class OtoDomOfferExtractor extends OfferExtractor {
     val description = offerElement tryExtract element(".text-contents") map (_.innerHtml)
     val offerParameters = offerElement tryExtract element(".section-offer-params") flatMap (_ tryExtract element(".col-md-offer-content")) map (_.innerHtml)
     val offerId = offerElement tryExtract element(".text-details") flatMap (_ tryExtract text(".left")) flatMap (text => idPat.findFirstIn(text))
-    Offer.createOtoDomOffer(link, Html(offerElement.innerHtml), orEmptyString(title), Html(orEmptyString(subtitle)), orEmptyString(price), orEmptyString(imageUrl),
+    Offer.createOtoDomOffer(link, orEmptyString(title), Html(orEmptyString(subtitle)), orEmptyString(price), orEmptyString(imageUrl),
       orEmptyString(offerId), Html(orEmptyString(offerParameters) + orEmptyString(description)))
   }
 }

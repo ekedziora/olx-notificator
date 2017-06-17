@@ -19,7 +19,7 @@ class GratkaOfferExtractor extends OfferExtractor {
     val imgUrl = offerElement tryExtract element("div.slides.links") flatMap (_ tryExtract element("img")) map (_ attr "src")
     val descriptionElement = offerElement tryExtract element("div#dane-podstawowe")
     val description = descriptionElement map (_.outerHtml)
-    Offer.createGratkaOffer(link, Html(offerElement.innerHtml), orEmptyString(title), Html(orEmptyString(subtitle)),
+    Offer.createGratkaOffer(link, orEmptyString(title), Html(orEmptyString(subtitle)),
       orEmptyString(price), orEmptyString(imgUrl), orEmptyString(offerId), Html(orEmptyString(description)))
   }
 }

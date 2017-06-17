@@ -19,7 +19,7 @@ class GumtreeOfferExtractor extends OfferExtractor {
     val offerIdString = offerElement tryExtract text(".title")
     val offerId = idPattern.findFirstIn(orEmptyString(offerIdString))
     val descriptionHtml = offerElement tryExtract element("div .vip-details").map(_.outerHtml)
-    Offer.createGumtreeOffer(link, Html(offerElement.innerHtml), orEmptyString(title), Html(""), orEmptyString(price),
+    Offer.createGumtreeOffer(link, orEmptyString(title), Html(""), orEmptyString(price),
       orEmptyString(imgUrl), orEmptyString(offerId), Html(orEmptyString(descriptionHtml)))
   }
 }
