@@ -18,4 +18,7 @@ object Offer {
 
   def createGumtreeOffer(url: String, pureHtml: Html, title: String, subtitleHtml: Html, price: String, imgUrl: String, id: String, descriptionHtml: Html) =
     new Offer(OfferId(id, ProviderType.Gumtree), url, pureHtml, title, subtitleHtml, price, imgUrl, descriptionHtml)
+
+  def createGratkaOffer(url: String, pureHtml: Html, title: String, subtitleHtml: Html, price: String, imgUrl: String, id: String, descriptionHtml: Html) =
+    new Offer(OfferId(id, ProviderType.Gratka), url, pureHtml, title, subtitleHtml, price, imgUrl, descriptionHtml)
 }
